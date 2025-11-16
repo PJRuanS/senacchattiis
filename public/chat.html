@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Senac MG - Chat da Turma</title>
+    <style>
+        /* Estilos Globais e do Chat */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { 
+            background: #f5f5f5; 
+            color: #333; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh;
+        }
+
+        :root {
+            --senac-blue: #1A4099;
+            --senac-light-blue: #0055a5;
+            --senac-yellow: #ffcd00;
+            --senac-red: #cc0000; /* Cor vermelha adicionada para o primeiro bloco de estilos */
+        }
+
+        /* Container Principal do Chat */
+        #chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            max-height: 900px;
+            display: none; /* só aparece após login */
+            flex-direction: column;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            background: #fff;
+        }
+
+        /* Cabeçalho do Chat */
+        #chat-header {
+            background: var(--senac-blue);
+            color: #fff;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Área de Mensagens */
+        #messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #fcfcfc;
+            list-style: none;
+            display: flex; /* Adicionado para usar flexbox no alinhamento dos balões */
+            flex-direction: column; /* Organiza os balões verticalmente */
+        }
+        
+        /* Estilo Base para as Mensagens (Lista <li>) */
+        #messages li {
+            list-style: none;
+            max-width: 70%; 
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 18px;
+            line-height: 1.4;
+            clear: both; /* Garante separação vertical */
+        }
+
+
+        /* Estilos Detalhados dos Balões - Segunda Seção de Estilo */
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-wrap: break-word;
+            font-size: 0.95em;
+        }
+        
+        /* ➡️ MINHAS MENSAGENS (LADO DIREITO - Amarelo) */
+        .my-message {
+            background: var(--senac-yellow);
+            color: var(--senac-blue);
+            margin-left: auto;
+            align-self: flex-end; /* Alinha o balão à direita */
+            border-bottom-right-radius: 4px;
+        }
+        
+        /* ⬅️ MENSAGENS DE OUTROS (LADO ESQUERDO - AZUL AJUSTADO) */
+        .other-message {
+            background: var(--senac-light-blue); /* Fundo Azul */
+            color: #fff; /* Texto Branco */
+            margin-right: auto;
+            align-self: flex-start; /* Alinha o balão à esquerda */
+            border-bottom-left-radius: 4px;
+        }
+        
+        /* Estilo do Nome do Usuário */
+        .message strong {
+            display: block;
+            font-size: 0.8em;
+            margin-bottom: 2px;
+            font-weight: bold;
+        }
+        
+        /* Cor do Nome - Minhas Mensagens (Azul Escuro) */
+        .my-message strong {
+            color: var(--senac-blue);
+        }
+
+        /* Cor do Nome - Outras Mensagens (Branco) */
+        .other-message strong {
+            color: #fff; /* Nome do usuário em branco para contraste no fundo azul */
+        }
+
+
+        /* Formulário de Envio */
+        #message-form {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+        #message-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            margin-right: 10px;
+        }
+        #message-form button {
+            background: var(--senac-light-blue);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: bold;
+        }
+        #message-form button:hover {
+            background: #003c73;
+        }
+
+        /* Tela de login (ocultada por padrão, mas mantida no estilo) */
+        #login-screen {
+            background: #fff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        #login-screen h2 {
+            color: var(--senac-blue);
+            margin-bottom: 20px;
+        }
+        #login-screen input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        #login-screen button {
+            background: var(--senac-yellow);
+            color: var(--senac-blue);
+            border: none;
+            padding: 12px 25px;
+            border-radius: 4px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #login-screen button:hover {
+            background: #e6b800;
+        }
+
+        .status-message {
+            font-size: 0.85em;
+            color: #666;
+            text-align: center;
+            margin: 10px 0;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <div id="chat-header">
+            <span>Chat da Turma Senac</span>
+            <span id="current-user-display"></span>
+        </div>
+        
+        <ul id="messages"></ul>
+        
+        <form id="message-form">
+            <input id="message-input" type="text" placeholder="Digite sua mensagem...">
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+    const messagesList = document.getElementById('messages');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const chatContainer = document.getElementById('chat-container');
+    // Certifique-se de que a porta 3000 está correta para seu servidor
+    const socket = io('http://localhost:3000'); 
+    
+    let currentUserName = ''; 
+
+    // Função para adicionar mensagem
+    function addMessage(data) {
+        const item = document.createElement('li');
+        
+        if (data.system) {
+            item.textContent = data.text;
+            item.classList.add('status-message');
+            messagesList.appendChild(item);
+            messagesList.scrollTop = messagesList.scrollHeight;
+            return;
+        }
+        
+        // Verifica se a mensagem é minha
+        const isMine = data.user === currentUserName; 
+        
+        // Aplica a classe correta, que define o lado (left/right) e a cor
+        item.classList.add('message', isMine ? 'my-message' : 'other-message');
+        
+        const userSpan = document.createElement('strong');
+        userSpan.textContent = data.user;
+        item.appendChild(userSpan);
+
+        const textNode = document.createTextNode(`${data.text}`); // Texto sem o ':' no começo
+        item.appendChild(textNode);
+
+        messagesList.appendChild(item);
+        messagesList.scrollTop = messagesList.scrollHeight;
+    }
+
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const messageText = messageInput.value.trim();
+        if (messageText && currentUserName) { 
+            // Envia mensagem
+            socket.emit('mensagem', { user: currentUserName, text: messageText });
+            messageInput.value = '';
+        }
+    });
+    
+    // escuta evento do servidor
+    socket.on('mensagem', function(data) {
+        addMessage(data);
+    });
+
+    // FUNÇÃO INICIALIZAÇÃO: Verifica o status de login
+    function initApp() {
+        const storedUser = localStorage.getItem('senacUser');
+        const currentUserDisplay = document.getElementById('current-user-display');
+
+        if (storedUser) {
+            currentUserName = storedUser;
+            
+            // Exibe o nome do usuário no cabeçalho
+            currentUserDisplay.textContent = `Olá, ${currentUserName}`; 
+
+            // Mostra o Container do Chat
+            chatContainer.style.display = 'flex';
+
+            // Envia notificação de que o usuário entrou
+            socket.emit('user_join', currentUserName); 
+            
+        } else {
+            // Se não está logado, redireciona
+            alert('Você precisa estar logado para acessar o chat. Redirecionando para login.');
+            window.location.href = 'login.html';
+        }
+    }
+
+    // Inicializa o chat ao carregar a página
+    initApp();
+</script>
+</body>
+</html>
