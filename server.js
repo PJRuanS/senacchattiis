@@ -1,8 +1,12 @@
+git add server.js
+git commit -m "Correção final de sintaxe"
+git push origin main
+
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose'); // Pacote para MongoDB
-// O Socket.IO também precisa ser incluído aqui se você usá-lo, 
-// mas para focar na parte do DB/API, vamos mantê-lo simples por enquanto.
+// O Socket.IO também precisa ser configurado aqui, mas para focar na API de Registro/Login...
 
 const app = express();
 // Configura a porta para usar a variável do Render (process.env.PORT), ou 3000 localmente
@@ -12,7 +16,6 @@ const MONGODB_URI = process.env.MONGODB_URI; // Variável de ambiente do Render
 // ===================================
 // 1. CONEXÃO COM O MONGODB
 // ===================================
-// MONGODB_URI é injetado pelo Render, contendo a URL do seu Cluster Atlas.
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ Conectado ao MongoDB Atlas com sucesso!'))
     .catch(err => console.error('❌ Erro de conexão com MongoDB:', err));
@@ -32,10 +35,9 @@ app.use(express.json());
 
 // ===================================
 // 2. ROTA DE HEALTH CHECK (/)
-// Adicionada aqui para evitar o erro "Cannot GET /"
+// Para verificar se o servidor está no ar
 // ===================================
 app.get('/', (req, res) => {
-    // Retorna um status 200 (OK) e uma mensagem de saúde do servidor
     res.status(200).json({ 
         status: 'ok', 
         message: 'Servidor de API do chat está ativo e conectado ao DB.' 
@@ -48,7 +50,7 @@ app.get('/', (req, res) => {
 app.post('/api/registro', async (req, res) => {
     const { nome, cpf, email, senha } = req.body;
     
-    // (Validações de dados omitidas por brevidade, mas devem ser incluídas)
+    // (Validações de dados omitidas por brevidade)
 
     try {
         // Verifica se o e-mail ou CPF já existem no banco de dados
@@ -106,14 +108,3 @@ app.post('/api/login', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta: ${PORT}`);
 });
-```
-eof
-
-### 2. Commit e Push Novamente
-
-Execute estes comandos no seu terminal do VS Code para enviar a versão limpa do código ao GitHub:
-
-```bash
-git add server.js
-git commit -m "Corrige erro de sintaxe: remove instruções de uso no server.js"
-git push origin main
