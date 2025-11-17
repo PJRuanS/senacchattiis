@@ -1,143 +1,190 @@
+// server.js
+// Servidor Express e Socket.IO para o Chat Senac
+
+// 1. IMPORTAÇÕES
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const http = require('http'); // 1. IMPORTAÇÃO NECESSÁRIA PARA O SERVIDOR HTTP
-const { Server } = require('socket.io'); // 2. IMPORTAÇÃO NECESSÁRIA PARA O SOCKET.IO
+const bcrypt = require('bcrypt'); // Para criptografar senhas
 
+// 2. CONFIGURAÇÃO BÁSICA DO APP
 const app = express();
-// Cria um servidor HTTP a partir do Express (essencial para o Socket.IO)
-const server = http.createServer(app); 
-const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI;
-
-// ===================================
-// 1. CONFIGURAÇÃO DO SOCKET.IO
-// ===================================
+const server = http.createServer(app);
+// Habilita o CORS para permitir que o front-end (login.html, registro.html) se conecte
 const io = new Server(server, {
     cors: {
-        // Permite conexões de qualquer origem para o Socket.IO
-        origin: "*", 
+        origin: "*", // Permite acesso de qualquer origem, ideal para o Render/desenvolvimento
         methods: ["GET", "POST"]
     }
 });
 
-// ===================================
-// 2. CONEXÃO COM O MONGODB
-// ===================================
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Conectado ao MongoDB Atlas com sucesso!'))
-    .catch(err => console.error('❌ Erro de conexão com MongoDB:', err));
+// A porta será a variável de ambiente PORT (usada pelo Render) ou 10000
+const PORT = process.env.PORT || 10000;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-// Esquema do Usuário (Estrutura do DB)
+// 3. MIDDLEWARE
+app.use(express.json()); // Permite que o Express leia o JSON do corpo das requisições
+app.use(cors());         // Permite requisições de outras origens
+
+// Configuração para servir arquivos estáticos (index.html, login.html, etc.)
+app.use(express.static(path.join(__dirname)));
+
+
+// 4. CONFIGURAÇÃO DO MONGOOSE E CONEXÃO COM O DB
+
+// Garante que a URI está configurada
+if (!MONGODB_URI) {
+    console.error("❌ MONGODB_URI não está definida no ambiente.");
+    // No Render, a variável deve ser configurada manualmente.
+} else {
+    // Conexão com o MongoDB
+    mongoose.connect(MONGODB_URI)
+        .then(() => {
+            console.log("✅ Conexão com MongoDB estabelecida com sucesso!");
+        })
+        .catch(err => {
+            console.error("❌ Erro de conexão com MongoDB:", err.message);
+            // O erro 'querySrv ENOTFOUND' ocorre aqui se a URI estiver errada.
+            // O erro é no DNS, que não consegue resolver o host do MongoDB.
+            console.error("Dica: Verifique se a variável MONGODB_URI está correta e se o Acesso à Rede no MongoDB Atlas permite a conexão (0.0.0.0/0).");
+        });
+}
+
+
+// 5. DEFINIÇÃO DO MODELO DE USUÁRIO (Schema)
 const userSchema = new mongoose.Schema({
-    nome: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
-    senha: { type: String, required: true },
-    cpf: { type: String, required: true, unique: true }
-});
+    cpf: { type: String, required: true, unique: true },
+    password: { type: String, required: true }, // Armazenaremos o hash da senha
+    // Outros campos como nome, telefone, etc., podem ser adicionados aqui
+}, { timestamps: true });
+
 const User = mongoose.model('User', userSchema);
 
-// Middlewares
-app.use(cors()); 
-app.use(express.json()); 
 
-// ===================================
-// 3. ROTA DE HEALTH CHECK (/)
-// ===================================
-app.get('/', (req, res) => {
-    res.status(200).json({ 
-        status: 'ok', 
-        message: 'Servidor de API do chat está ativo e conectado ao DB.' 
-    });
-});
+// 6. ROTAS DA API
 
-// ===================================
-// 4. Rota de REGISTRO (/api/registro)
-// ===================================
-app.post('/api/registro', async (req, res) => {
-    const { nome, cpf, email, senha } = req.body;
-    
-    // (Validações de dados omitidas por brevidade)
+// Rota de Cadastro de Novo Usuário (POST /registro)
+app.post('/registro', async (req, res) => {
+    const { username, email, cpf, senha } = req.body;
+
+    if (!username || !email || !cpf || !senha) {
+        return res.status(400).json({ message: "Todos os campos obrigatórios devem ser preenchidos." });
+    }
 
     try {
-        if (await User.findOne({ $or: [{ email }, { cpf }] })) {
-            return res.status(400).json({ message: 'E-mail ou CPF já cadastrado.' });
+        // 1. Verifica se o usuário/email/cpf já existe
+        const existingUser = await User.findOne({ $or: [{ email }, { cpf }] });
+        if (existingUser) {
+            return res.status(409).json({ message: "E-mail ou CPF já cadastrado." });
         }
-        
-        const newUser = new User({ nome, cpf, email, senha });
+
+        // 2. Criptografa a senha antes de salvar
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(senha, salt);
+
+        // 3. Cria e salva o novo usuário
+        const newUser = new User({
+            username,
+            email,
+            cpf,
+            password: hashedPassword
+        });
+
         await newUser.save();
 
-        console.log(`Usuário registrado: ${newUser.nome}`);
-        return res.status(201).json({ message: 'Cadastro realizado com sucesso!' });
+        res.status(201).json({ message: "Usuário cadastrado com sucesso!" });
 
     } catch (error) {
-        console.error("Erro ao registrar:", error);
-        return res.status(500).json({ message: 'Erro interno no servidor.' });
+        console.error("Erro no registro:", error);
+        res.status(500).json({ message: "Erro interno do servidor ao registrar usuário." });
     }
 });
 
-// ===================================
-// 5. Rota de LOGIN (/api/login)
-// ===================================
-app.post('/api/login', async (req, res) => {
+// Rota de Login de Usuário (POST /login)
+app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
 
-    try {
-        const user = await User.findOne({ email: email, senha: senha });
+    if (!email || !senha) {
+        return res.status(400).json({ message: "E-mail e senha são obrigatórios." });
+    }
 
-        if (user) {
-            console.log(`Login bem-sucedido: ${user.nome}`);
-            // NOTA: O frontend espera que a rota de login retorne o nome do usuário 
-            // no campo 'nome' para salvar no localStorage, então estou ajustando.
-            return res.status(200).json({ 
-                message: 'Login bem-sucedido!',
-                nome: user.nome, // Retorna 'nome' para ser salvo no cliente como 'senacUser'
-                email: user.email 
-            });
-        } else {
-            return res.status(401).json({ message: 'Credenciais inválidas.' });
+    try {
+        // 1. Encontra o usuário pelo e-mail
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ message: "Credenciais inválidas. E-mail não encontrado." });
         }
 
+        // 2. Compara a senha fornecida com o hash armazenado
+        const isMatch = await bcrypt.compare(senha, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: "Credenciais inválidas. Senha incorreta." });
+        }
+
+        // 3. Login bem-sucedido
+        // Retorna o username para ser salvo no localStorage do front-end
+        res.status(200).json({ message: "Login bem-sucedido!", username: user.username });
+
     } catch (error) {
-        console.error("Erro ao fazer login:", error);
-        return res.status(500).json({ message: 'Erro interno no servidor.' });
+        console.error("Erro no login:", error);
+        res.status(500).json({ message: "Erro interno do servidor durante o login." });
     }
 });
 
 
-// ===================================
-// 6. LÓGICA DO CHAT SOCKET.IO
-// ===================================
+// Rota para o root (/) que deve redirecionar ou servir o HTML
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+
+// 7. LÓGICA DO CHAT COM SOCKET.IO
 io.on('connection', (socket) => {
     console.log(`[Socket.IO] Novo usuário conectado: ${socket.id}`);
 
-    // Quando um usuário se junta à sala, ele envia o nome
+    // Guarda o nome do usuário associado a este socket
+    let currentUserName = "Anônimo"; 
+
+    // Ouve quando o usuário se junta (enviado pelo chat.html)
     socket.on('user_join', (username) => {
-        console.log(`[Chat] Usuário ${username} entrou.`);
-        // Envia uma mensagem de sistema para TODOS OS OUTROS
-        socket.broadcast.emit('system_message', `${username} entrou na sala.`);
+        currentUserName = username;
+        console.log(`[Socket.IO] Usuário ${currentUserName} se juntou ao chat.`);
+        // Opcional: Avisar outros usuários que um novo membro se juntou
+        // socket.broadcast.emit('mensagem', { user: 'Sistema', text: `${currentUserName} entrou na sala.` });
     });
 
-    // Quando o servidor recebe uma mensagem
-    socket.on('mensagem', (data) => {
-        console.log(`[Mensagem Recebida] De: ${data.user}, Texto: ${data.text}`);
+    // Ouve por novas mensagens
+    socket.on('mensagem', (msg) => {
+        // msg deve ser { user: "Nome do Usuário", text: "Mensagem" }
+        console.log(`[Chat] Mensagem de ${msg.user}: ${msg.text}`);
+
+        // Re-emite a mensagem para TODOS os clientes conectados (incluindo quem enviou)
+        io.emit('mensagem', msg);
         
-        // CORREÇÃO CRÍTICA: Retransmite a mensagem para TODOS OS OUTROS CLIENTES (exceto o remetente).
-        // Isso resolve o problema de comunicação em tempo real.
-        socket.broadcast.emit('mensagem', data);
+        // Futuramente, a mensagem pode ser salva no MongoDB aqui.
     });
 
-    // Quando um usuário se desconecta
+    // Ouve quando um cliente se desconecta
     socket.on('disconnect', () => {
-        console.log(`[Socket.IO] Usuário desconectado: ${socket.id}`);
+        console.log(`[Socket.IO] Usuário desconectado: ${socket.id} (${currentUserName})`);
+        // Opcional: Avisar que o usuário saiu
+        // socket.broadcast.emit('mensagem', { user: 'Sistema', text: `${currentUserName} saiu da sala.` });
     });
 });
 
 
-// ===================================
-// 7. Inicia o Servidor HTTP (e não apenas o Express)
-// ===================================
+// 8. INICIALIZAÇÃO DO SERVIDOR
 server.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta: ${PORT}`);
     console.log(`API do Chat acessível em http://localhost:${PORT}`);
+    if (MONGODB_URI) {
+        // Mostra o host da URI para facilitar o debug (pode ser o que está incorreto)
+        const host = MONGODB_URI.substring(MONGODB_URI.lastIndexOf('@') + 1, MONGODB_URI.lastIndexOf('/'));
+        console.log(`Host do MongoDB: ${host}`);
+    }
 });
