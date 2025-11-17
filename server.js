@@ -1,225 +1,140 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Senac MG - Cadastro de Novo Aluno</title>
-    <style>
-        /* Reset e Base */
-        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background:#f5f5f5; color:#333; }
-        a { text-decoration:none; color:#0055a5; }
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose'); // Pacote para MongoDB
+// O Socket.IO também precisa ser configurado aqui, mas para focar na API de Registro/Login...
+const mongoose = require('mongoose');
+const http = require('http'); // 1. IMPORTAÇÃO NECESSÁRIA PARA O SERVIDOR HTTP
+const { Server } = require('socket.io'); // 2. IMPORTAÇÃO NECESSÁRIA PARA O SOCKET.IO
 
-        /* HEADER UNIFICADO */
-        .header-services { background:#0055a5; }
-        .service-nav { 
-            max-width:1200px; margin:0 auto; padding:5px 20px; 
-            display:flex; justify-content:flex-end; gap:5px;
-        }
-        .service-btn {
-            background-color:transparent; color:#fff; padding:5px 8px;
-            border-radius:4px; font-size:13px; font-weight:normal;
-            display:flex; align-items:center; transition:background-color 0.3s;
-        }
-        .service-btn:hover { background-color:#003c73; }
-        .service-btn::before { content: '🔗'; margin-right:4px; font-size:14px; } 
+const app = express();
+// Configura a porta para usar a variável do Render (process.env.PORT), ou 3000 localmente
+const PORT = process.env.PORT || 3000; 
+const MONGODB_URI = process.env.MONGODB_URI; // Variável de ambiente do Render
+// Cria um servidor HTTP a partir do Express (essencial para o Socket.IO)
+const server = http.createServer(app); 
+const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-        /* Form Container */
-        .form-container {
-            max-width: 500px;
-            margin: 50px auto;
-            padding: 30px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
+// ===================================
+// 1. CONFIGURAÇÃO DO SOCKET.IO
+// ===================================
+const io = new Server(server, {
+    cors: {
+        // Permite conexões de qualquer origem para o Socket.IO
+        origin: "*", 
+        methods: ["GET", "POST"]
+    }
+});
 
-        .form-container h2 {
-            text-align: center;
-            color: #1A4099;
-            margin-bottom: 25px;
-            border-bottom: 2px solid #ffcd00;
-            padding-bottom: 10px;
-        }
+// ===================================
+// 1. CONEXÃO COM O MONGODB
+// 2. CONEXÃO COM O MONGODB
+// ===================================
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Conectado ao MongoDB Atlas com sucesso!'))
+@@ -31,8 +42,7 @@ app.use(cors());
+app.use(express.json()); 
 
-        .form-group {
-            margin-bottom: 15px;
-        }
+// ===================================
+// 2. ROTA DE HEALTH CHECK (/)
+// Para verificar se o servidor está no ar
+// 3. ROTA DE HEALTH CHECK (/)
+// ===================================
+app.get('/', (req, res) => {
+    res.status(200).json({ 
+@@ -42,20 +52,18 @@ app.get('/', (req, res) => {
+});
 
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #333;
-        }
+// ===================================
+// 3. Rota de REGISTRO (/api/registro)
+// 4. Rota de REGISTRO (/api/registro)
+// ===================================
+app.post('/api/registro', async (req, res) => {
+    const { nome, cpf, email, senha } = req.body;
 
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 16px;
+    // (Validações de dados omitidas por brevidade)
+
+    try {
+        // Verifica se o e-mail ou CPF já existem no banco de dados
+        if (await User.findOne({ $or: [{ email }, { cpf }] })) {
+            return res.status(400).json({ message: 'E-mail ou CPF já cadastrado.' });
         }
 
-        .submit-btn {
-            width: 100%;
-            background-color: #1A4099;
-            color: white;
-            padding: 12px 20px;
-            margin-top: 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: background-color 0.3s, transform 0.1s;
+        // Cria e salva o novo usuário no DB
+        const newUser = new User({ nome, cpf, email, senha });
+        await newUser.save();
+
+@@ -69,26 +77,24 @@ app.post('/api/registro', async (req, res) => {
+});
+
+// ===================================
+// 4. Rota de LOGIN (/api/login)
+// 5. Rota de LOGIN (/api/login)
+// ===================================
+app.post('/api/login', async (req, res) => {
+    const { email, senha } = req.body;
+
+    // (Validações de campos vazios omitidas)
+
+    try {
+        // Busca o usuário pelo e-mail e senha no MongoDB
+        const user = await User.findOne({ email: email, senha: senha });
+
+        if (user) {
+            // Login bem-sucedido
+            console.log(`Login bem-sucedido: ${user.nome}`);
+            // NOTA: O frontend espera que a rota de login retorne o nome do usuário 
+            // no campo 'nome' para salvar no localStorage, então estou ajustando.
+            return res.status(200).json({ 
+                message: 'Login bem-sucedido!',
+                user: { nome: user.nome, email: user.email } // Retorna dados básicos
+                nome: user.nome, // Retorna 'nome' para ser salvo no cliente como 'senacUser'
+                email: user.email 
+            });
+        } else {
+            // Usuário não encontrado ou senha incorreta
+            return res.status(401).json({ message: 'Credenciais inválidas.' });
         }
 
-        .submit-btn:hover {
-            background-color: #0055a5;
-            transform: translateY(-1px);
-        }
+@@ -100,9 +106,38 @@ app.post('/api/login', async (req, res) => {
 
-        .login-link {
-            text-align: center;
-            margin-top: 15px;
-        }
 
-        /* Mensagem de alerta customizada */
-        #custom-alert {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 15px 25px;
-            border-radius: 5px;
-            border: 1px solid #f5c6cb;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            z-index: 1000;
-            display: none;
-            font-size: 16px;
-        }
-    </style>
-</head>
-<body>
+// ===================================
+// 5. Inicia o Servidor
+// 6. LÓGICA DO CHAT SOCKET.IO
+// ===================================
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta: ${PORT}`);
+io.on('connection', (socket) => {
+    console.log(`[Socket.IO] Novo usuário conectado: ${socket.id}`);
 
-    <header>
-        <div class="header-services">
-            <nav class="service-nav">
-                <a href="index.html" class="service-btn">Portal</a>
-                <a href="#" class="service-btn">Fale Conosco</a>
-                <a href="login.html" class="service-btn">Área do Aluno</a>
-            </nav>
-        </div>
-    </header>
+    // Quando um usuário se junta à sala, ele envia o nome
+    socket.on('user_join', (username) => {
+        console.log(`[Chat] Usuário ${username} entrou.`);
+        // Envia uma mensagem de sistema para TODOS OS OUTROS
+        socket.broadcast.emit('system_message', `${username} entrou na sala.`);
+    });
 
-    <main>
-        <div class="form-container">
-            <h2>Cadastro de Novo Aluno</h2>
-            <form id="form-registro">
-                <div class="form-group">
-                    <label for="username">Nome de Usuário:</label>
-                    <input type="text" id="username" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label for="email">E-mail:</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="cpf">CPF (apenas números):</label>
-                    <input type="text" id="cpf" name="cpf" required pattern="\d{11}" title="O CPF deve conter 11 dígitos.">
-                </div>
-                <div class="form-group">
-                    <label for="senha">Senha:</label>
-                    <input type="password" id="senha" name="senha" required>
-                </div>
-                <div class="form-group">
-                    <label for="confirma_senha">Confirmar Senha:</label>
-                    <input type="password" id="confirma_senha" name="confirma_senha" required>
-                </div>
-                <button type="submit" class="submit-btn">Registrar</button>
-            </form>
-            <div class="login-link">
-                Já tem cadastro? <a href="login.html">Faça Login aqui.</a>
-            </div>
-        </div>
-        <div id="custom-alert"></div>
-    </main>
+    // Quando o servidor recebe uma mensagem
+    socket.on('mensagem', (data) => {
+        console.log(`[Mensagem Recebida] De: ${data.user}, Texto: ${data.text}`);
+        
+        // CORREÇÃO CRÍTICA: Retransmite a mensagem para TODOS OS OUTROS CLIENTES (exceto o remetente).
+        // Isso resolve o problema de comunicação em tempo real.
+        socket.broadcast.emit('mensagem', data);
+    });
 
-    <footer>
-        <p>Central de Relacionamento: 0800 724 44 40 | Senac MG © Todos os Direitos Reservados.</p>
-    </footer>
+    // Quando um usuário se desconecta
+    socket.on('disconnect', () => {
+        console.log(`[Socket.IO] Usuário desconectado: ${socket.id}`);
+    });
+});
 
-    <script>
-        // Função customizada para exibir mensagens de erro/sucesso (substitui alert())
-        function displayMessage(message, type = 'error') {
-            const alertBox = document.getElementById('custom-alert');
-            alertBox.textContent = message;
-            alertBox.style.backgroundColor = type === 'success' ? '#d4edda' : '#f8d7da';
-            alertBox.style.color = type === 'success' ? '#155724' : '#721c24';
-            alertBox.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
-            alertBox.style.display = 'block';
-            setTimeout(() => {
-                alertBox.style.display = 'none';
-            }, 4000);
-        }
 
-        const formRegistro = document.getElementById('form-registro');
-
-        formRegistro.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            // 1. Coleta e Validação dos dados
-            const data = {
-                username: document.getElementById('username').value.trim(),
-                email: document.getElementById('email').value.trim(),
-                cpf: document.getElementById('cpf').value.trim(),
-                senha: document.getElementById('senha').value,
-                confirma_senha: document.getElementById('confirma_senha').value
-            };
-
-            if (Object.values(data).some(val => val === '')) {
-                displayMessage('Por favor, preencha todos os campos obrigatórios.');
-                return;
-            }
-            if (data.senha !== data.confirma_senha) {
-                displayMessage('As senhas não coincidem. Por favor, verifique.');
-                return;
-            }
-            // Remove a confirmação antes de enviar
-            delete data.confirma_senha; 
-
-            // 2. Envio dos dados para a API Back-end
-            try {
-                // ROTA CORRIGIDA: Chama a rota /api/registro no próprio servidor
-                const response = await fetch('/api/registro', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json' 
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // Cadastro SUCESSO
-                    displayMessage(result.message + ' Redirecionando para login...', 'success');
-                    setTimeout(() => {
-                        window.location.href = 'login.html'; 
-                    }, 2000);
-                } else {
-                    // Erro (ex: 400 - E-mail ou CPF duplicado)
-                    displayMessage('Erro no cadastro: ' + result.message);
-                }
-
-            } catch (error) {
-                console.error('Erro ao conectar com o servidor:', error);
-                displayMessage('Erro de conexão. Verifique se o servidor Node.js está rodando.');
-            }
-        });
-    </script>
-</body>
-</html>
+// ===================================
+// 7. Inicia o Servidor HTTP (e não apenas o Express)
+// ===================================
+server.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta: ${PORT}`);
+    console.log(`API do Chat acessível em http://localhost:${PORT}`);
+});
