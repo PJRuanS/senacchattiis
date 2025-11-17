@@ -1,6 +1,3 @@
-git add server.js
-git commit -m "Correção final de sintaxe"
-git push origin main
 
 
 const express = require('express');
@@ -108,3 +105,4 @@ app.post('/api/login', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta: ${PORT}`);
 });
+
