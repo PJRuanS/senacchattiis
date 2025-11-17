@@ -62,4 +62,17 @@ app.post('/api/registro', async (req, res) => {
 // ===================================
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta: ${PORT}`);
+
+
+
+    // Adicione este bloco após 'app.use(express.json());' e antes de suas rotas /api
+
+app.get('/', (req, res) => {
+    // Retorna um status 200 (OK) e uma mensagem de saúde do servidor
+    res.status(200).json({ 
+        status: 'ok', 
+        message: 'Servidor de API do chat está ativo e conectado ao DB.' 
+    });
+}); 
+
 });
