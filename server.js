@@ -1,22 +1,57 @@
 const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose'); // Pacote para MongoDB
-// O Socket.IO também precisa ser configurado aqui, mas para focar na API de Registro/Login...
+const http = require('http');
 const mongoose = require('mongoose');
-const http = require('http'); // 1. IMPORTAÇÃO NECESSÁRIA PARA O SERVIDOR HTTP
-const { Server } = require('socket.io'); // 2. IMPORTAÇÃO NECESSÁRIA PARA O SOCKET.IO
+const path = require('path');
+const cors = require('cors'); // Necessário para permitir requisições de outras origens
+const { Server } = require('socket.io');
 
 const app = express();
-// Configura a porta para usar a variável do Render (process.env.PORT), ou 3000 localmente
-const PORT = process.env.PORT || 3000; 
-const MONGODB_URI = process.env.MONGODB_URI; // Variável de ambiente do Render
-// Cria um servidor HTTP a partir do Express (essencial para o Socket.IO)
-const server = http.createServer(app); 
-const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI;
 
 // ===================================
-// 1. CONFIGURAÇÃO DO SOCKET.IO
+// 1. CONFIGURAÇÕES DE AMBIENTE
+// ===================================
+const PORT = process.env.PORT || 3000;
+// A variável de ambiente do Render será usada automaticamente
+const MONGODB_URI = process.env.MONGODB_URI || 'SUA_URI_DO_MONGODB_AQUI'; 
+
+// Cria o servidor HTTP a partir do Express (ESSENCIAL para o Socket.IO)
+const server = http.createServer(app);
+
+// ===================================
+// 2. CONEXÃO COM O MONGODB
+// ===================================
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Conexão com MongoDB estabelecida com sucesso!'))
+    .catch(err => {
+        console.error('❌ ERRO AO CONECTAR AO MONGODB:', err);
+    });
+
+// ===================================
+// 3. DEFINIÇÃO DO MODELO MONGOOSE (User Model)
+// ===================================
+const UserSchema = new mongoose.Schema({
+    nome: { type: String, required: true },
+    cpf: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    // Lembrete: Use bcrypt para hash de senha em produção!
+    senha: { type: String, required: true },
+    saldo: { type: Number, default: 1000.00 }
+});
+const User = mongoose.model('User', UserSchema);
+
+
+// ===================================
+// 4. MIDDLEWARE DO EXPRESS
+// ===================================
+// Habilita o CORS para requisições externas
+app.use(cors());
+// Serve os arquivos estáticos da pasta 'public' (necessário se o seu frontend estiver junto)
+app.use(express.static(path.join(__dirname, 'public')));
+// Middleware para parsear o corpo das requisições como JSON
+app.use(express.json());
+
+// ===================================
+// 5. CONFIGURAÇÃO DO SOCKET.IO
 // ===================================
 const io = new Server(server, {
     cors: {
@@ -27,114 +62,107 @@ const io = new Server(server, {
 });
 
 // ===================================
-// 1. CONEXÃO COM O MONGODB
-// 2. CONEXÃO COM O MONGODB
+// 6. ROTAS DE AUTENTICAÇÃO E DADOS
 // ===================================
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Conectado ao MongoDB Atlas com sucesso!'))
-@@ -31,8 +42,7 @@ app.use(cors());
-app.use(express.json()); 
 
-// ===================================
-// 2. ROTA DE HEALTH CHECK (/)
-// Para verificar se o servidor está no ar
-// 3. ROTA DE HEALTH CHECK (/)
-// ===================================
+// ROTA DE HEALTH CHECK (/)
 app.get('/', (req, res) => {
     res.status(200).json({ 
-@@ -42,20 +52,18 @@ app.get('/', (req, res) => {
+        status: 'ok', 
+        message: 'Servidor Senac API está no ar e respondendo!',
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 
-// ===================================
-// 3. Rota de REGISTRO (/api/registro)
-// 4. Rota de REGISTRO (/api/registro)
-// ===================================
+// Rota de REGISTRO (/api/registro)
 app.post('/api/registro', async (req, res) => {
     const { nome, cpf, email, senha } = req.body;
 
-    // (Validações de dados omitidas por brevidade)
-
     try {
-        // Verifica se o e-mail ou CPF já existem no banco de dados
         if (await User.findOne({ $or: [{ email }, { cpf }] })) {
-            return res.status(400).json({ message: 'E-mail ou CPF já cadastrado.' });
+            return res.status(400).json({ message: 'E-mail ou CPF já cadastrados.' });
         }
 
-        // Cria e salva o novo usuário no DB
         const newUser = new User({ nome, cpf, email, senha });
         await newUser.save();
 
-@@ -69,26 +77,24 @@ app.post('/api/registro', async (req, res) => {
+        res.status(201).json({
+            message: 'Usuário registrado com sucesso!',
+            nome: newUser.nome,
+            email: newUser.email,
+            saldo: newUser.saldo
+        });
+    } catch (error) {
+        console.error('Erro no registro:', error);
+        res.status(500).json({ message: 'Erro interno no servidor ao registrar.' });
+    }
 });
 
-// ===================================
-// 4. Rota de LOGIN (/api/login)
-// 5. Rota de LOGIN (/api/login)
-// ===================================
+// Rota de LOGIN (/api/login)
 app.post('/api/login', async (req, res) => {
     const { email, senha } = req.body;
 
-    // (Validações de campos vazios omitidas)
-
     try {
-        // Busca o usuário pelo e-mail e senha no MongoDB
-        const user = await User.findOne({ email: email, senha: senha });
+        const user = await User.findOne({ email: email });
 
-        if (user) {
-            // Login bem-sucedido
+        if (user && user.senha === senha) {
             console.log(`Login bem-sucedido: ${user.nome}`);
-            // NOTA: O frontend espera que a rota de login retorne o nome do usuário 
-            // no campo 'nome' para salvar no localStorage, então estou ajustando.
-            return res.status(200).json({ 
+            
+            return res.status(200).json({
                 message: 'Login bem-sucedido!',
-                user: { nome: user.nome, email: user.email } // Retorna dados básicos
-                nome: user.nome, // Retorna 'nome' para ser salvo no cliente como 'senacUser'
-                email: user.email 
+                username: user.nome, // Nome do campo esperado pelo frontend
+                email: user.email,
+                saldo: user.saldo
             });
         } else {
-            // Usuário não encontrado ou senha incorreta
             return res.status(401).json({ message: 'Credenciais inválidas.' });
         }
 
-@@ -100,9 +106,38 @@ app.post('/api/login', async (req, res) => {
+    } catch (error) {
+        console.error('Erro no login:', error);
+        res.status(500).json({ message: 'Erro interno no servidor ao logar.' });
+    }
+});
+
+// Rota para fornecer a lista de cursos (dados mockados)
+app.get('/api/cursos', (req, res) => {
+    const cursos = [
+        { id: 1, titulo: "Técnico em Informática para Internet", duracao: "1.200h", inicio: "12/03/2024", modalidade: "Presencial", img: "https://placehold.co/150x100/1A4099/FFFFFF?text=Info" },
+        { id: 2, titulo: "Especialização Técnica em Desenvolvimento Mobile", duracao: "360h", inicio: "05/05/2024", modalidade: "EAD", img: "https://placehold.co/150x100/1A4099/FFFFFF?text=Mobile" },
+        { id: 3, titulo: "Programador Web - Java", duracao: "300h", inicio: "10/06/2024", modalidade: "Presencial", img: "https://placehold.co/150x100/1A4099/FFFFFF?text=Java" },
+        { id: 4, titulo: "Técnico em Redes de Computadores", duracao: "1.000h", inicio: "01/08/2024", modalidade: "Presencial", img: "https://placehold.co/150x100/1A4099/FFFFFF?text=Redes" }
+    ];
+    res.json(cursos);
+});
 
 
 // ===================================
-// 5. Inicia o Servidor
-// 6. LÓGICA DO CHAT SOCKET.IO
+// 7. LÓGICA DO CHAT (SOCKET.IO)
 // ===================================
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta: ${PORT}`);
 io.on('connection', (socket) => {
-    console.log(`[Socket.IO] Novo usuário conectado: ${socket.id}`);
+    console.log('[Socket.IO] Novo usuário conectado:', socket.id);
 
-    // Quando um usuário se junta à sala, ele envia o nome
     socket.on('user_join', (username) => {
         console.log(`[Chat] Usuário ${username} entrou.`);
         // Envia uma mensagem de sistema para TODOS OS OUTROS
         socket.broadcast.emit('system_message', `${username} entrou na sala.`);
     });
 
-    // Quando o servidor recebe uma mensagem
     socket.on('mensagem', (data) => {
         console.log(`[Mensagem Recebida] De: ${data.user}, Texto: ${data.text}`);
-        
-        // CORREÇÃO CRÍTICA: Retransmite a mensagem para TODOS OS OUTROS CLIENTES (exceto o remetente).
-        // Isso resolve o problema de comunicação em tempo real.
-        socket.broadcast.emit('mensagem', data);
+        // io.emit envia para TODOS (incluindo o remetente). Se você quiser que o remetente não veja, use socket.broadcast.emit
+        io.emit('mensagem', data);
     });
 
-    // Quando um usuário se desconecta
     socket.on('disconnect', () => {
-        console.log(`[Socket.IO] Usuário desconectado: ${socket.id}`);
+        console.log('[Socket.IO] Usuário desconectado:', socket.id);
     });
 });
 
-
 // ===================================
-// 7. Inicia o Servidor HTTP (e não apenas o Express)
+// 8. INICIALIZAÇÃO DO SERVIDOR HTTP
+// IMPORTANTE: O Socket.IO precisa do 'server' HTTP para rodar!
 // ===================================
 server.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta: ${PORT}`);
-    console.log(`API do Chat acessível em http://localhost:${PORT}`);
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
