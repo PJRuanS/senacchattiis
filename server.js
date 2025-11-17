@@ -109,12 +109,11 @@ app.listen(PORT, () => {
 ```
 eof
 
-### Próximos Passos Obrigatórios:
+### 2. Commit e Push Novamente
 
-1.  **Substitua** o conteúdo do seu `server.js` localmente com este código.
-2.  **Commit e Push para o GitHub:**
+Execute estes comandos no seu terminal do VS Code para enviar a versão limpa do código ao GitHub:
 
-    ```bash
-    git add server.js
-    git commit -m "Implementa rotas de registro e login com MongoDB e health check"
-    git push origin main
+```bash
+git add server.js
+git commit -m "Corrige erro de sintaxe: remove instruções de uso no server.js"
+git push origin main
